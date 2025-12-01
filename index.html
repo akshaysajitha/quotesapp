@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Insight Generator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use Inter font -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Light gray background */
+        }
+        .card {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            background: linear-gradient(135deg, #ffffff 0%, #f9f9f9 100%);
+            border: 1px solid #e5e7eb;
+            transition: transform 0.3s ease-in-out;
+        }
+        .card:hover {
+             transform: translateY(-2px);
+        }
+        .prediction-text {
+            min-height: 100px;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div id="app" class="w-full max-w-md">
+        <div class="card p-8 rounded-xl space-y-6 text-center">
+            <h1 class="text-3xl font-extrabold text-indigo-700">
+                ഇന്നത്തെ ദിവ്യവാക്ക്‌ (Today's Divine Word)
+            </h1>
+            <p class="text-gray-500">
+                ഇന്നത്തെ സന്ദേശം അറിയാൻ ബട്ടൺ അമർത്തുക.
+            </p>
+
+            <!-- Prediction Display Area -->
+            <div id="prediction-container" class="prediction-text bg-indigo-50 p-4 rounded-lg flex items-center justify-center">
+                <p id="prediction-text" class="text-xl font-semibold text-indigo-800 italic">
+                    സന്ദേശത്തിനായി കാത്തിരിക്കുന്നു...
+                </p>
+            </div>
+
+            <!-- Button to Trigger Generation -->
+            <button id="generate-btn" 
+                    class="w-full py-3 px-6 bg-indigo-600 text-white font-bold rounded-lg 
+                           hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50 
+                           transition duration-150 ease-in-out shadow-lg transform hover:scale-[1.02]">
+                ഇന്നത്തെ സന്ദേശം നേടുക
+            </button>
+
+            <!-- Loading Spinner -->
+            <div id="loading-indicator" class="hidden text-center mt-4">
+                <svg class="animate-spin h-5 w-5 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p class="text-sm text-gray-500 mt-2">Connecting to the cosmos...</p>
+            </div>
+
+            <!-- Error Message -->
+            <p id="error-message" class="text-sm text-red-500 mt-4 hidden"></p>
+        </div>
+    </div>
+
+    <!-- Firebase SDK Imports (required for Canvas environment) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // --- NOTE FOR LOCAL/GIT USAGE ---
+        // These variables are injected by the Canvas environment.
+        // If running this file outside Canvas, you must replace the logic below
+        // with your own Firebase configuration and handle authentication manually,
+        // or simply remove the Firebase-related code if you only need the Gemini API part.
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        // 1. Initialize Firebase
+        if (Object.keys(firebaseConfig).length > 0) {
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            const db = getFirestore(app);
+            setLogLevel('debug');
+
+            // 2. Sign in (required for security rules)
+            (async () => {
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    // Auth successful, the app is ready to run
+                } catch (error) {
+                    console.error("Firebase Auth Error:", error);
+                    document.getElementById('error-message').textContent = 'Authentication failed. Functionality might be limited.';
+                    document.getElementById('error-message').classList.remove('hidden');
+                }
+            })();
+        } else {
+            console.warn("Firebase config not available. Proceeding without authentication.");
+        }
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const generateBtn = document.getElementById('generate-btn');
+            const predictionTextEl = document.getElementById('prediction-text');
+            const loadingIndicator = document.getElementById('loading-indicator');
+            const errorMessageEl = document.getElementById('error-message');
+
+            // API Configuration
+            // In the Canvas environment, the apiKey is automatically handled when left blank.
+            // For local use, you MUST supply a valid Google AI Studio API Key here.
+            // DO NOT commit your API key to a public repository like GitHub.
+const apiKey = "###GOOGLE_API_KEY_PLACEHOLDER###"; // <--- CHANGE THIS
+const modelName = "gemini-2.5-flash-preview-09-2025";
+const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+            // System Instruction is updated to generate spiritual messages in Malayalam
+            const systemPrompt = "You are a source of profound, hopeful wisdom. Generate a single, short, inspiring affirmation or prediction for the user's day in Malayalam. The tone must be solemn, encouraging, and highly inspirational, resembling spiritual or classical Malayalam proverbs/scriptures. The response must be one short sentence. Do not use any introductory phrases.";
+            const userQuery = "Generate my daily affirmation in Malayalam.";
+            
+            // Function to handle fetching from the Gemini API with exponential backoff
+            async function fetchWithBackoff(url, options, maxRetries = 5) {
+                for (let attempt = 0; attempt < maxRetries; attempt++) {
+                    try {
+                        const response = await fetch(url, options);
+                        if (!response.ok) {
+                            // If response is not ok (e.g., 429 rate limit), throw to trigger retry
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return await response.json();
+                    } catch (error) {
+                        console.error(`Attempt ${attempt + 1} failed:`, error);
+                        if (attempt < maxRetries - 1) {
+                            const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        } else {
+                            throw new Error("Failed to connect to the prediction service after multiple retries.");
+                        }
+                    }
+                }
+            }
+
+            async function generatePrediction() {
+                // Clear previous state
+                predictionTextEl.textContent = '';
+                errorMessageEl.classList.add('hidden');
+                
+                // Show loading state
+                generateBtn.disabled = true;
+                generateBtn.textContent = 'സന്ദേശം സൃഷ്ടിക്കുന്നു...'; // Generating... in Malayalam
+                loadingIndicator.classList.remove('hidden');
+
+                const payload = {
+                    contents: [{ parts: [{ text: userQuery }] }],
+                    systemInstruction: {
+                        parts: [{ text: systemPrompt }]
+                    },
+                    // We use Google Search grounding for fresh, real-world context 
+                    // that can add depth to the 'prediction'.
+                    tools: [{ "google_search": {} }], 
+                };
+
+                try {
+                    const result = await fetchWithBackoff(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    
+                    if (text) {
+                        predictionTextEl.textContent = text.trim();
+                    } else {
+                        predictionTextEl.textContent = "ദൈവിക സന്ദേശം ലഭിച്ചില്ല. വീണ്ടും ശ്രമിക്കുക!"; // Divine message not received. Try again!
+                    }
+
+                } catch (error) {
+                    console.error('Prediction Generation Error:', error);
+                    predictionTextEl.textContent = "സന്ദേശം ലഭിക്കുന്നതിൽ ഒരു പിശക് സംഭവിച്ചു. ദയവായി നിങ്ങളുടെ കണക്ഷൻ പരിശോധിക്കുക."; // An error occurred... check connection
+                    errorMessageEl.textContent = error.message;
+                    errorMessageEl.classList.remove('hidden');
+                } finally {
+                    // Hide loading state
+                    generateBtn.disabled = false;
+                    generateBtn.textContent = 'ഇന്നത്തെ സന്ദേശം നേടുക'; // Get Today's Insight in Malayalam
+                    loadingIndicator.classList.add('hidden');
+                }
+            }
+
+            // Event Listener for the button
+            generateBtn.addEventListener('click', generatePrediction);
+        });
+    </script>
+</body>
+</html>
