@@ -1,0 +1,28 @@
+name: Deploy Daily Insight Generator
+
+on:
+  push:
+    branches:
+      - main # Make sure this matches your main branch name
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      # 1. Inject the secret key value into index.html
+      - name: Inject API Key from Secret
+        run: |
+          # Use sed to find the placeholder and replace it with the secret value.
+          # The '|' character is used as a delimiter since the API key contains slashes.
+          sed -i 's|###GOOGLE_API_KEY_PLACEHOLDER###|${{ secrets.GOOGLE_API_KEY_PLACEHOLDER }}|g' index.html
+      
+      # 2. Deploy the modified index.html to GitHub Pages
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./ # Assumes index.html is in the root directory
+          # The built file (with the key injected) is deployed to your gh-pages branch.
